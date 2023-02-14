@@ -9,15 +9,16 @@ using UnityEngine;
 
 public class NetworkManager : MonoBehaviour
 {
-    public Queue<string> buffer;
+    public Queue<byte[]> buffer;
     Boolean game_active = true;
+    [SerializeField] private GameObject rocket;
     // Start is called before the first frame update
     void Start()
     {
         //NOTE: Opening a socket will cause the current process to hang
         //When starting a networking task, start it in a new thread
         Task.Factory.StartNew(StartServer, TaskCreationOptions.LongRunning);
-        buffer = new Queue<string>();
+        buffer = new Queue<byte[]>();
     }
 
     // Update is called once per frame
@@ -25,7 +26,14 @@ public class NetworkManager : MonoBehaviour
     {
         while(buffer.Count > 0)
         {
-            Debug.Log(buffer.Dequeue());
+            byte[] rec = buffer.Dequeue();
+            byte[] x_ba = new byte[sizeof(float)];
+            byte[] y_ba = new byte[sizeof(float)];
+            Array.Copy(rec, 0, x_ba, 0, sizeof(float));
+            Array.Copy(rec, sizeof(float), y_ba, 0, sizeof(float));
+            float x = BitConverter.ToSingle(x_ba);
+            float y = BitConverter.ToSingle(y_ba);
+            rocket.transform.position = new Vector3(x, y);
         }
     }
 
@@ -66,12 +74,10 @@ public class NetworkManager : MonoBehaviour
             {
                 bytes = new byte[1024];
                 int bytesRec = handler.Receive(bytes); //listening for a response will also cause the current process to hang until it receives a response
-                data = Encoding.ASCII.GetString(bytes, 0, bytesRec);
-                buffer.Enqueue(data);
+                byte[] to_buf = new byte[bytesRec];
+                Array.Copy(bytes, 0, to_buf, 0, bytesRec);
+                buffer.Enqueue(to_buf);
             }
-
-            byte[] msg = Encoding.UTF8.GetBytes(data);
-            handler.Send(msg);
             handler.Shutdown(SocketShutdown.Both);
             handler.Close();
             
